@@ -1,0 +1,27 @@
+modLoader="javafml"
+loaderVersion="${loader_version_range}"
+license="All Rights Reserved"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+authors="Voranix"
+description='''VoranixVisualFX: mod cliente, solo efectos visuales (sin bloques, items ni mecánicas de juego).
+El servidor le avisa por un canal de red (plugin message) cuándo tintar el cielo/niebla de un color, por
+cuánto tiempo y con qué fundido; el mod solo dibuja. No pasa nada si un jugador no lo tiene instalado: el
+servidor sigue funcionando igual, ese jugador simplemente no ve el efecto.'''
+
+[[dependencies.${mod_id}]]
+modId="forge"
+mandatory=true
+versionRange="${forge_version_range}"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
+modId="minecraft"
+mandatory=true
+versionRange="${minecraft_version_range}"
+ordering="NONE"
+side="BOTH"

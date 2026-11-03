@@ -1,0 +1,14 @@
+.gradle/
+build/
+bin/
+run/
+out/
+src/generated/
+.idea/
+.vscode/
+*.iml
+*.log
+*.jar
+gradle-dist/
+jdk17.zip
+gradle-8.10.2-bin.zip
