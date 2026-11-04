@@ -9,28 +9,36 @@ import net.minecraftforge.network.NetworkEvent;
 import java.util.function.Supplier;
 
 /**
- * Lo manda el plugin de Paper cuando producción pide un color de cielo. Formato del payload
- * (después del byte de id que ya consume el SimpleChannel, ver NetworkHandler):
- *   1 byte  rojo   (0-255)
- *   1 byte  verde  (0-255)
- *   1 byte  azul   (0-255)
+ * Lo manda el plugin de Paper cuando producción pide un color de cielo. Trae DOS colores: el del
+ * horizonte (lo que se ve mirando al costado - también tiñe la niebla) y el del cenit (mirando
+ * para arriba). Si son el mismo color, el cielo se ve parejo; si son distintos, se arma un
+ * degradado entre los dos. Formato del payload (después del byte de id, ver NetworkHandler):
+ *   3 bytes horizonte: rojo, verde, azul (0-255)
+ *   3 bytes cenit:     rojo, verde, azul (0-255)
  *   4 bytes duracionTicks (int, big-endian) - 0 o menos = apagar ya
  *   4 bytes fundidoTicks  (int, big-endian) - cuánto tarda en aparecer/desaparecer
- * Son enteros de tamaño fijo a propósito, no VarInt: así del lado de Bukkit se arman con un
+ * Enteros de tamaño fijo a propósito, no VarInt: así del lado de Bukkit se arman con un
  * DataOutputStream común, sin reimplementar el VarInt de Minecraft.
  */
-public record SkyColorPacket(int rojo, int verde, int azul, int duracionTicks, int fundidoTicks) {
+public record SkyColorPacket(int rojoHorizonte, int verdeHorizonte, int azulHorizonte,
+                              int rojoCenit, int verdeCenit, int azulCenit,
+                              int duracionTicks, int fundidoTicks) {
 
     public static void encode(SkyColorPacket pkt, FriendlyByteBuf buf) {
-        buf.writeByte(pkt.rojo());
-        buf.writeByte(pkt.verde());
-        buf.writeByte(pkt.azul());
+        buf.writeByte(pkt.rojoHorizonte());
+        buf.writeByte(pkt.verdeHorizonte());
+        buf.writeByte(pkt.azulHorizonte());
+        buf.writeByte(pkt.rojoCenit());
+        buf.writeByte(pkt.verdeCenit());
+        buf.writeByte(pkt.azulCenit());
         buf.writeInt(pkt.duracionTicks());
         buf.writeInt(pkt.fundidoTicks());
     }
 
     public static SkyColorPacket decode(FriendlyByteBuf buf) {
-        return new SkyColorPacket(buf.readByte() & 0xFF, buf.readByte() & 0xFF, buf.readByte() & 0xFF,
+        return new SkyColorPacket(
+                buf.readByte() & 0xFF, buf.readByte() & 0xFF, buf.readByte() & 0xFF,
+                buf.readByte() & 0xFF, buf.readByte() & 0xFF, buf.readByte() & 0xFF,
                 buf.readInt(), buf.readInt());
     }
 

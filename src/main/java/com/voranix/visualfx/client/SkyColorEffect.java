@@ -6,11 +6,13 @@ import net.minecraft.client.Minecraft;
 /**
  * Guarda el efecto de cielo activo (si hay uno) y calcula, para el tick/frame actual, qué tan
  * "adentro" del color está (0 = sin efecto, se ve todo vanilla; 1 = color a pleno), con fundido
- * de entrada y de salida. ClientEvents lee esto en cada frame para teñir la niebla.
+ * de entrada y de salida. ClientEvents lee esto en cada frame para teñir la niebla y dibujar el
+ * domo del cielo.
  */
 public final class SkyColorEffect {
 
-    private static float rojo, verde, azul;
+    private static float rojoH, verdeH, azulH;
+    private static float rojoC, verdeC, azulC;
     private static long inicioTick = -1;
     private static int duracionTicks, fundidoTicks;
 
@@ -18,9 +20,12 @@ public final class SkyColorEffect {
     }
 
     public static void aplicar(SkyColorPacket pkt) {
-        rojo = pkt.rojo() / 255f;
-        verde = pkt.verde() / 255f;
-        azul = pkt.azul() / 255f;
+        rojoH = pkt.rojoHorizonte() / 255f;
+        verdeH = pkt.verdeHorizonte() / 255f;
+        azulH = pkt.azulHorizonte() / 255f;
+        rojoC = pkt.rojoCenit() / 255f;
+        verdeC = pkt.verdeCenit() / 255f;
+        azulC = pkt.azulCenit() / 255f;
         duracionTicks = Math.max(0, pkt.duracionTicks());
         fundidoTicks = Math.max(0, pkt.fundidoTicks());
         inicioTick = duracionTicks > 0 ? tickActual() : -1;
@@ -49,15 +54,27 @@ public final class SkyColorEffect {
         return (float) Math.max(0, Math.min(1, f));
     }
 
-    public static float rojo() {
-        return rojo;
+    public static float rojoHorizonte() {
+        return rojoH;
     }
 
-    public static float verde() {
-        return verde;
+    public static float verdeHorizonte() {
+        return verdeH;
     }
 
-    public static float azul() {
-        return azul;
+    public static float azulHorizonte() {
+        return azulH;
+    }
+
+    public static float rojoCenit() {
+        return rojoC;
+    }
+
+    public static float verdeCenit() {
+        return verdeC;
+    }
+
+    public static float azulCenit() {
+        return azulC;
     }
 }

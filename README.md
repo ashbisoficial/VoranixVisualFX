@@ -28,24 +28,33 @@ El plugin `VoranixExtremo` le manda al mod un paquete por el canal de red `voran
 | Bytes | Campo | Tipo |
 |---|---|---|
 | 1 | id del paquete | byte (siempre `0` por ahora: "color de cielo") |
-| 1 | rojo | byte (0-255) |
-| 1 | verde | byte (0-255) |
-| 1 | azul | byte (0-255) |
+| 1 | rojo horizonte | byte (0-255) |
+| 1 | verde horizonte | byte (0-255) |
+| 1 | azul horizonte | byte (0-255) |
+| 1 | rojo cenit | byte (0-255) |
+| 1 | verde cenit | byte (0-255) |
+| 1 | azul cenit | byte (0-255) |
 | 4 | duración | int, big-endian, en ticks (0 = apagar ya) |
 | 4 | fundido | int, big-endian, en ticks (cuánto tarda en entrar/salir) |
 
-Son 13 bytes, todos de tamaño fijo (nada de VarInt), para que el lado del plugin los arme con un `DataOutputStream` común sin tener que reimplementar el formato de enteros variables de Minecraft. La clase que los arma y los manda, del lado del plugin, es `VisualFxBridge.java` en el repo de `VoranixExtremo` — **si se cambia este formato acá, hay que cambiarlo ahí también**, byte a byte.
+Son 16 bytes, todos de tamaño fijo (nada de VarInt), para que el lado del plugin los arme con un `DataOutputStream` común sin tener que reimplementar el formato de enteros variables de Minecraft. "Horizonte" y "cenit" pueden ser el mismo color (cielo parejo) o distintos (degradado). La clase que los arma y los manda, del lado del plugin, es `VisualFxBridge.java` en el repo de `VoranixExtremo` — **si se cambia este formato acá, hay que cambiarlo ahí también**, byte a byte.
 
 ## Qué hace con eso
 
-`client/SkyColorEffect.java` guarda el color y calcula, cuadro a cuadro, una "intensidad" de 0 a 1 según cuánto pasó desde que empezó, con fundido de entrada y salida. `client/ClientEvents.java` mezcla ese color sobre la niebla (`ViewportEvent.ComputeFogColor`), que es lo que define el tono del cielo/horizonte en Minecraft vanilla — sin efecto activo, no toca absolutamente nada.
+`client/SkyColorEffect.java` guarda los dos colores y calcula, cuadro a cuadro, una "intensidad" de 0 a 1 según cuánto pasó desde que empezó, con fundido de entrada y salida. `client/ClientEvents.java` hace dos cosas con eso:
+
+1. Tiñe la niebla con el color de horizonte (`ViewportEvent.ComputeFogColor`) — lo que ya había, define el tono mirando a los costados.
+2. Dibuja un domo (un abanico de triángulos, cenit en la punta, horizonte en el borde) por encima de todo, sin escribir profundidad — igual que el propio cielo de Minecraft, así que terreno, nubes, sol y luna se siguen viendo normal, dibujados encima. Esto es lo que cubre **mirando para arriba**, que la niebla sola no tiñe.
+
+Sin efecto activo (intensidad 0), ninguna de las dos partes toca nada.
 
 ## Estado / próximos pasos
 
-Compiló limpio (`./gradlew build`, Forge 47.2.0 / Java 17) después de corregir un nombre de clase (`ClientEvents.java` usaba `EntityViewRenderEvent.FogColors`, que en Forge moderno se llama `ViewportEvent.ComputeFogColor` — ya corregido, verificado contra la fuente real de Forge). Falta probarlo en el juego:
+Compiló limpio una vez (`./gradlew build`, Forge 47.2.0 / Java 17) después de corregir `ClientEvents.java` (usaba `EntityViewRenderEvent.FogColors`, que en Forge moderno se llama `ViewportEvent.ComputeFogColor` — verificado contra la fuente real de Forge). El domo del cenit (`onRenderSky`, agregado después) **todavía no se compiló ni se probó**: usa `RenderLevelStageEvent#getPoseStack()`/`getPartialTick()`, nombres habituales para esto en mods Forge 1.20.1 pero sin verificar contra el jar real — si el build tira error ahí, es lo primero a revisar (está anotado en el propio archivo).
 
-1. `./gradlew runClient` para probarlo a mano (se puede llamar `SkyColorEffect.aplicar(...)` desde un comando de prueba, o levantar `runServer` + el plugin de verdad en un server de prueba).
-2. Confirmar en el server híbrido que el `/fx cielo <color>` del plugin realmente le llega y se ve.
-3. Una vez confirmado, el `.jar` va donde el instalador reparte los mods de la serie.
+1. `./gradlew build` — si falla, mandar el error tal cual para corregir el nombre exacto del getter que falte.
+2. `./gradlew runClient` o probar en el server de verdad con `/fx cielo <color>`.
+3. Confirmar especialmente: mirando derecho para arriba se ve el color (no el azul/negro de siempre), y las nubes se siguen viendo (no quedan tapadas por el domo).
+4. Una vez confirmado, el `.jar` va donde el instalador reparte los mods de la serie.
 
 Ideas para después, si hace falta más que el cielo: la misma estructura (un paquete nuevo, un `id` nuevo en `NetworkHandler`) sirve para cualquier otro efecto puramente visual (vibrado de cámara, viñeta de color, etc.) sin tocar lo que ya hay.
