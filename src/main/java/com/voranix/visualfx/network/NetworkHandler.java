@@ -27,9 +27,10 @@ public final class NetworkHandler {
 
     public static void register() {
         int id = 0;
-        // El id (0) es el primer byte de cada paquete: tiene que coincidir con el que arma
+        // El id es el primer byte de cada paquete: tiene que coincidir con el que arma
         // VisualFxBridge.java del lado del plugin. Si se agrega un paquete nuevo va con el
         // siguiente id (id++) - nunca cambiar el id de uno que ya existe, rompe la otra punta.
         CHANNEL.registerMessage(id++, SkyColorPacket.class, SkyColorPacket::encode, SkyColorPacket::decode, SkyColorPacket::handle);
+        CHANNEL.registerMessage(id++, FogZonePacket.class, FogZonePacket::encode, FogZonePacket::decode, FogZonePacket::handle);
     }
 }
