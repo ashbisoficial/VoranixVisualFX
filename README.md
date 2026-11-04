@@ -38,14 +38,14 @@ Son 13 bytes, todos de tamaño fijo (nada de VarInt), para que el lado del plugi
 
 ## Qué hace con eso
 
-`client/SkyColorEffect.java` guarda el color y calcula, cuadro a cuadro, una "intensidad" de 0 a 1 según cuánto pasó desde que empezó, con fundido de entrada y salida. `client/ClientEvents.java` mezcla ese color sobre la niebla (`EntityViewRenderEvent.FogColors`), que es lo que define el tono del cielo/horizonte en Minecraft vanilla — sin efecto activo, no toca absolutamente nada.
+`client/SkyColorEffect.java` guarda el color y calcula, cuadro a cuadro, una "intensidad" de 0 a 1 según cuánto pasó desde que empezó, con fundido de entrada y salida. `client/ClientEvents.java` mezcla ese color sobre la niebla (`ViewportEvent.ComputeFogColor`), que es lo que define el tono del cielo/horizonte en Minecraft vanilla — sin efecto activo, no toca absolutamente nada.
 
 ## Estado / próximos pasos
 
-Esto es un primer corte, escrito y revisado a mano pero **sin compilar todavía** (el entorno donde se escribió no tiene el toolchain de Forge con red a `maven.minecraftforge.net`). Antes de usarlo en stream:
+Compiló limpio (`./gradlew build`, Forge 47.2.0 / Java 17) después de corregir un nombre de clase (`ClientEvents.java` usaba `EntityViewRenderEvent.FogColors`, que en Forge moderno se llama `ViewportEvent.ComputeFogColor` — ya corregido, verificado contra la fuente real de Forge). Falta probarlo en el juego:
 
-1. `./gradlew build` en una máquina con red — si tira error, lo más probable es el método `getPartialTick()` en `ClientEvents.java` (está comentado ahí mismo por qué).
-2. `./gradlew runClient` para probarlo a mano (sin servidor: se puede llamar `SkyColorEffect.aplicar(...)` desde un comando de prueba, o levantar `runServer` + el plugin en un server de prueba).
-3. Una vez compilado, el `.jar` va donde el instalador reparte los mods de la serie.
+1. `./gradlew runClient` para probarlo a mano (se puede llamar `SkyColorEffect.aplicar(...)` desde un comando de prueba, o levantar `runServer` + el plugin de verdad en un server de prueba).
+2. Confirmar en el server híbrido que el `/fx cielo <color>` del plugin realmente le llega y se ve.
+3. Una vez confirmado, el `.jar` va donde el instalador reparte los mods de la serie.
 
 Ideas para después, si hace falta más que el cielo: la misma estructura (un paquete nuevo, un `id` nuevo en `NetworkHandler`) sirve para cualquier otro efecto puramente visual (vibrado de cámara, viñeta de color, etc.) sin tocar lo que ya hay.
