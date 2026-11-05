@@ -67,14 +67,14 @@ Sin efecto activo (intensidad 0), ninguna de las partes toca nada.
 
 ## Estado / próximos pasos
 
-Compiló limpio una vez (`./gradlew build`, Forge 47.2.0 / Java 17) después de corregir `ClientEvents.java` (usaba `EntityViewRenderEvent.FogColors`, que en Forge moderno se llama `ViewportEvent.ComputeFogColor`). Lo agregado después (el domo del cenit y toda la parte de niebla por zonas) **todavía no se compiló ni se probó**:
+Compila y carga bien en el juego (probado por el usuario: vidas, cielo y niebla funcionando). Ajustes hechos sobre la marcha, probados:
 
-- El domo (`onRenderSky`) usa `RenderLevelStageEvent#getPoseStack()`/`getPartialTick()`, nombres habituales en mods Forge 1.20.1 pero sin verificar contra el jar real — si el build tira error ahí, es lo primero a revisar (anotado en el propio archivo).
-- `ComputeFogColor` y `RenderFog` (los dos eventos de niebla) sí están verificados contra la fuente real de Forge (`ViewportEvent.java`), incluido el detalle de que `RenderFog` necesita `event.setCanceled(true)` para que los cambios de distancia tomen efecto - ya está en el código.
+- `BufferUploader` estaba mal importado (`net.minecraft.client.renderer` → `com.mojang.blaze3d.vertex`), confirmado contra la documentación de Mojang.
+- El anillo del horizonte del domo (`ALTURA_HORIZONTE`) estaba exactamente a la altura de los ojos (0): mirando al frente la cámara lo veía de canto en vez de ver la cara inclinada, y el color recién se notaba mirando bastante para arriba. Se bajó a -90.
+- El domo se dibuja desde ADENTRO (la cámara está rodeada). Sin desactivar el culling, la GPU descartaba buena parte de los triángulos según la dirección — por eso se veía fuerte yendo hacia el horizonte pero casi nada mirando para arriba. Se agregó `RenderSystem.disableCull()`/`enableCull()` alrededor del dibujo.
 
-1. `./gradlew build` — si falla, mandar el error tal cual para corregir el nombre exacto del getter que falte.
-2. `./gradlew runClient` o probar en el server de verdad con `/fx cielo <color>` y `/fx niebla crear <nombre> <radio>`.
-3. Confirmar: mirando derecho para arriba se ve el color del cielo (no el azul/negro de siempre) y las nubes se siguen viendo; al entrar/salir caminando de una zona de niebla, la transición es gradual (no un salto brusco) y de verdad se ve menos lejos adentro.
-4. Una vez confirmado, el `.jar` va donde el instalador reparte los mods de la serie.
+Todavía evaluando si con eso alcanza o si hace falta ajustar más el radio/altura del domo para que el color domine más (pedido explícito: "debe verse más el color").
+
+Ideas para después: la misma estructura (un paquete nuevo, un `id` nuevo en `NetworkHandler`) sirve para cualquier otro efecto puramente visual (vibrado de cámara, viñeta de color, HUD de corazones custom, etc.) sin tocar lo que ya hay.
 
 Ideas para después: la misma estructura (un paquete nuevo, un `id` nuevo en `NetworkHandler`) sirve para cualquier otro efecto puramente visual (vibrado de cámara, viñeta de color, etc.) sin tocar lo que ya hay.

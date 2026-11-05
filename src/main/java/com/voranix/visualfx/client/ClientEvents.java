@@ -103,6 +103,11 @@ public final class ClientEvents {
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.depthMask(false);
+        // Clave: el domo se ve desde ADENTRO (la cámara está rodeada por él). Si no se desactiva
+        // el culling, la GPU descarta la mitad de los triángulos según el orden de los vértices
+        // y el domo queda invisible mirando en ciertas direcciones (por eso se veía bien yendo
+        // hacia el horizonte pero casi nada mirando para arriba).
+        RenderSystem.disableCull();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
 
         BufferBuilder buffer = Tesselator.getInstance().getBuilder();
@@ -120,6 +125,7 @@ public final class ClientEvents {
         }
         BufferUploader.drawWithShader(buffer.end());
 
+        RenderSystem.enableCull();
         RenderSystem.depthMask(true);
         RenderSystem.disableBlend();
     }
