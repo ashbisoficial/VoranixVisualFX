@@ -40,9 +40,14 @@ import org.joml.Matrix4f;
 public final class ClientEvents {
 
     private static final int SEGMENTOS = 24;
-    private static final float RADIO_HORIZONTE = 400f;
-    private static final float ALTURA_CENIT = 400f;
-    private static final float ALTURA_HORIZONTE = 0f;
+    private static final float RADIO_HORIZONTE = 300f;
+    private static final float ALTURA_CENIT = 280f;
+    // Ojo acá: tiene que quedar CLARAMENTE por debajo de la altura de la cámara (0), no en 0 ni
+    // cerca. Un anillo exactamente a la altura de los ojos queda "de canto" mirando al frente
+    // (nivel) - la cámara ve ese borde del abanico de triángulos de perfil, en vez de ver la cara
+    // inclinada del domo, y el degradado se nota recién mirando bastante para arriba ("muy alto").
+    // Bajándolo bien por debajo, la cara inclinada queda a la vista enseguida, mirando al frente.
+    private static final float ALTURA_HORIZONTE = -90f;
 
     private ClientEvents() {
     }
