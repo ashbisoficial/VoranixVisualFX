@@ -1,5 +1,6 @@
 package com.voranix.visualfx.client;
 
+import com.mojang.blaze3d.shaders.FogShape;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
@@ -8,18 +9,22 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.voranix.visualfx.VoranixVisualFX;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.RenderGuiOverlayEvent;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.client.event.ViewportEvent;
+import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.joml.Matrix4f;
 
 /**
- * Cuatro cosas, todas opcionales (si el efecto correspondiente no está activo, no tocan nada):
+ * Cinco cosas, todas opcionales (si el efecto correspondiente no está activo, no tocan nada):
  *  - onComputeFogColor: tiñe la niebla con el color del cielo global (SkyColorEffect) y, encima,
  *    con el color/densidad de las zonas de humo que toquen la posición de la CÁMARA en este
  *    frame (SmokeZoneRegistry.mezclar) - se recalcula en vivo cada frame, no hay rampa ni
@@ -30,14 +35,24 @@ import org.joml.Matrix4f;
  *    sin problema.
  *  - onRenderFog: achica la distancia de niebla (cuánto se ve) según la densidad de zona de
  *    humo en la posición de la cámara - esto SÍ hay que cancelar el evento para que tome efecto,
- *    lo dice el propio Javadoc de Forge para RenderFog.
+ *    lo dice el propio Javadoc de Forge para RenderFog. Fuerza FogShape.SPHERE para que mirar
+ *    para arriba/abajo adentro de una zona se sienta igual de "tapado" que mirar al horizonte
+ *    (el cilindro por defecto deja ver más lejos para arriba).
+ *  - onOverlayHumo: la niebla de distancia sola no tapa lo que está MUY lejos (cielo, sol, nubes
+ *    de fondo - eso no tiene "distancia" real para el fog). Esto dibuja una capa de color plana
+ *    a pantalla completa, con alpha proporcional a la densidad, justo antes de que se dibuje el
+ *    hotbar (RenderGuiOverlayEvent.Pre para VanillaGuiOverlay.HOTBAR) - el hotbar y todo lo que
+ *    se pinta después en el HUD vanilla (vida, chat, scoreboard, lista de jugadores, barra de
+ *    boss, títulos) queda arriba de esta capa sin que la toquemos, porque no cancelamos el
+ *    evento: solo dibujamos antes y dejamos que el render normal siga su curso.
  *
  * OJO al compilar: RenderLevelStageEvent#getPoseStack()/getPartialTick() son los nombres
  * habituales en mods Forge 1.20.1 para esto, pero no los pude verificar contra el jar real de
  * Forge (sin red hacia maven.minecraftforge.net acá) - si el compilador no los encuentra, es
  * lo primero a revisar (puede que haya un getter con otro nombre, o que haya que sacarlos del
- * propio event de otra forma). ComputeFogColor, RenderFog y Camera#getPosition() sí están
- * verificados contra la fuente real de Forge/vanilla.
+ * propio event de otra forma). ComputeFogColor, RenderFog (incluido setFogShape),
+ * RenderGuiOverlayEvent.Pre/VanillaGuiOverlay.HOTBAR y Camera#getPosition() sí están verificados
+ * contra la fuente real de Forge/vanilla (javadoc + uso real en mods 1.20.1).
  */
 @Mod.EventBusSubscriber(modid = VoranixVisualFX.MODID, value = Dist.CLIENT)
 public final class ClientEvents {
@@ -45,6 +60,8 @@ public final class ClientEvents {
     private static final int SEGMENTOS = 24;
     private static final float RADIO_HORIZONTE = 300f;
     private static final float ALTURA_CENIT = 280f;
+    /** Alpha máximo (0-1) de la capa de pantalla completa, con densidad 1 (bien adentro de la zona). */
+    private static final float ALPHA_HUMO_MAXIMO = 0.7f;
     // Ojo acá: tiene que quedar CLARAMENTE por debajo de la altura de la cámara (0), no en 0 ni
     // cerca. Un anillo exactamente a la altura de los ojos queda "de canto" mirando al frente
     // (nivel) - la cámara ve ese borde del abanico de triángulos de perfil, en vez de ver la cara
@@ -88,9 +105,43 @@ public final class ClientEvents {
         }
         event.setNearPlaneDistance(lerp(event.getNearPlaneDistance(), zona.cercana(), zona.densidad()));
         event.setFarPlaneDistance(lerp(event.getFarPlaneDistance(), zona.lejana(), zona.densidad()));
+        // Esférico en vez del cilindro por defecto: que mirar para arriba/abajo adentro de la
+        // zona se vea igual de tapado que mirar al horizonte (el Javadoc de setFogShape dice que
+        // el cambio de forma también necesita el evento cancelado para tomar efecto).
+        event.setFogShape(FogShape.SPHERE);
         // Forge exige cancelar el evento para que los cambios de distancia tomen efecto
         // (Javadoc de RenderFog en ViewportEvent.java) - sin esto, setear las distancias no hace nada.
         event.setCanceled(true);
+    }
+
+    /**
+     * Capa de color plana a pantalla completa cuando la cámara está adentro de una zona de humo -
+     * la niebla de distancia sola no alcanza a tapar lo que está MUY lejos (cielo, sol, nubes de
+     * fondo), porque esas cosas no tienen una "distancia" real contra la que aplicar fog. Se
+     * dibuja justo antes del hotbar (ver Javadoc de la clase) para no tapar el resto del HUD.
+     */
+    @SubscribeEvent
+    public static void onOverlayHumo(RenderGuiOverlayEvent.Pre event) {
+        if (event.getOverlay() != VanillaGuiOverlay.HOTBAR.type()) {
+            return;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) {
+            return;
+        }
+        Vec3 camara = mc.gameRenderer.getMainCamera().getPosition();
+        SmokeZoneRegistry.Mezcla zona = SmokeZoneRegistry.mezclar(camara.x, camara.y, camara.z);
+        if (zona.densidad() <= 0f) {
+            return;
+        }
+        int alpha = Math.round(zona.densidad() * ALPHA_HUMO_MAXIMO * 255f);
+        int rojo = Math.round(zona.rojo() * 255f);
+        int verde = Math.round(zona.verde() * 255f);
+        int azul = Math.round(zona.azul() * 255f);
+        int color = (alpha << 24) | (rojo << 16) | (verde << 8) | azul;
+
+        GuiGraphics gui = event.getGuiGraphics();
+        gui.fill(0, 0, gui.guiWidth(), gui.guiHeight(), color);
     }
 
     @SubscribeEvent
