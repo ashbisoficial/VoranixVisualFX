@@ -23,7 +23,7 @@ El `.jar` queda en `build/libs/`.
 
 ## Cómo se controla (protocolo)
 
-El plugin `VoranixExtremo` le manda al mod paquetes por el canal de red `voranixvisualfx:main` (un [plugin message](https://wiki.vg/Plugin_channels) común y corriente, nada de HTTP ni RCON — viaja por la misma conexión del jugador). Hay dos tipos de paquete, cada uno con su `id` (primer byte, lo consume `NetworkHandler` antes del resto del payload):
+El plugin `VoranixExtremo` le manda al mod paquetes por el canal de red `voranixvisualfx:main` (un [plugin message](https://wiki.vg/Plugin_channels) común y corriente, nada de HTTP ni RCON — viaja por la misma conexión del jugador). Cada uno tiene su `id` (primer byte, lo consume `NetworkHandler` antes del resto del payload). Los campos de texto (nombre de zona) usan un formato propio — 1 byte de longitud + UTF-8 (`network/ByteUtil.java`) — **no** el `writeUtf` nativo de Minecraft, que usa VarInt para la longitud; así del lado del plugin se arman con un `DataOutputStream` común sin reimplementar el VarInt de Minecraft. Todo el resto de los campos también es de tamaño fijo por el mismo motivo.
 
 ### id 0 — `SkyColorPacket`: color de cielo global
 
@@ -40,41 +40,54 @@ El plugin `VoranixExtremo` le manda al mod paquetes por el canal de red `voranix
 
 "Horizonte" y "cenit" pueden ser el mismo color (cielo parejo) o distintos (degradado).
 
-### id 1 — `FogZonePacket`: niebla de una zona específica del mapa
+### id 1 — `ZoneAddPacket`: agrega (o reemplaza) una zona de humo/niebla
 
 | Bytes | Campo | Tipo |
 |---|---|---|
-| 1 | rojo | byte (0-255) |
-| 1 | verde | byte (0-255) |
-| 1 | azul | byte (0-255) |
-| 4 | cercana | float, big-endian, bloques donde arranca la niebla |
-| 4 | lejana | float, big-endian, bloques donde ya no se ve nada (0 = apagar) |
-| 4 | fundido | int, big-endian, en ticks |
+| 1+N | nombre | texto (`ByteUtil`) |
+| 1 | tipo | byte (0 = caja, 1 = esfera) |
+| 8×6 | p0..p5 | double — **caja:** minX,minY,minZ,maxX,maxY,maxZ · **esfera:** centroX,centroY,centroZ,radio,-,- |
+| 3 | color | byte×3 (0-255) |
+| 4 | cercana | float, bloques donde arranca la niebla adentro de la zona |
+| 4 | lejana | float, bloques donde ya no se ve nada adentro de la zona |
+| 4 | margen | float, bloques de caída ANTES de llegar al borde (fuera de la zona) |
+| 1 | creciendoActivo | byte (0/1) — reservado para la "máquina de humo", sin usar todavía |
+| 8 | tickInicio | long, gameTime del mundo — reservado, sin usar todavía |
+| 4 | velocidadBloquesPorSegundo | float — reservado, sin usar todavía |
+| 4 | radioMaximo | float — reservado, sin usar todavía |
 
-A diferencia del de cielo, este no tiene "duración": el plugin decide quién está adentro de una zona (ver `FogZoneManager.java` en el repo de `VoranixExtremo`) y manda un paquete cada vez que un jugador entra o sale — "fundido" acá es cuánto tarda la transición al cruzar el borde, no cuánto dura adentro.
+### id 2 — `ZoneRemovePacket`: saca una zona por nombre
 
-Todos los campos son de tamaño fijo (nada de VarInt), para que del lado del plugin se armen con un `DataOutputStream` común sin reimplementar el formato de enteros variables de Minecraft. Las clases que los arman y los mandan, del lado del plugin, están en `VisualFxBridge.java` del repo de `VoranixExtremo` — **si se cambia alguno de estos formatos acá, hay que cambiarlo ahí también**, byte a byte.
+| Bytes | Campo | Tipo |
+|---|---|---|
+| 1+N | nombre | texto (`ByteUtil`) |
+
+### id 3 — `ZoneClearPacket`: "borrá todas las zonas que tengas"
+
+Sin payload. El plugin lo manda antes de reenviar las zonas de un mundo nuevo (al conectarse, registrar el canal, o cambiar de mundo), para que el cliente nunca tenga zonas de un mundo que no es el actual — el plugin decide **qué zonas mandar** según en qué mundo está cada jugador; el cliente no filtra nada por su cuenta, confía en que lo que tiene en su registro es del mundo correcto.
+
+Las clases que arman y mandan estos tres últimos, del lado del plugin, están en `VisualFxBridge.java`/`FogZoneManager.java` del repo de `VoranixExtremo` — **si se cambia alguno de estos formatos acá, hay que cambiarlo ahí también**, byte a byte.
 
 ## Qué hace con eso
 
-`client/SkyColorEffect.java` y `client/FogZoneEffect.java` guardan cada uno su color/intensidad y la van actualizando cuadro a cuadro. `client/ClientEvents.java` los lee y:
+- `client/SkyColorEffect.java` — color de cielo global, con su rampa de entrada/salida (eso no cambió).
+- `client/SmokeZone.java` — una zona de humo (caja o esfera, la misma clase con un campo de tipo), con `density(x, y, z, tick)`: 1.0 adentro, cae lineal en los últimos `margen` bloques antes del borde, 0.0 más allá.
+- `client/SmokeZoneRegistry.java` — qué zonas hay activas ahora (las que mandó el plugin para este mundo) y `mezclar(x, y, z)`: la densidad **máxima** entre todas las que tocan ese punto, con el color mezclado por peso de cada una que esté aportando.
 
-1. Tiñe la niebla (`ViewportEvent.ComputeFogColor`) con el color de horizonte del cielo global y, encima, con el color de la zona de niebla local si el jugador está adentro de una — se pueden combinar los dos a la vez.
-2. Dibuja el domo del cielo global (`RenderLevelStageEvent.AFTER_SKY`, un abanico de triángulos, cenit en la punta y horizonte en el borde) por encima de todo, sin escribir profundidad — igual que el propio cielo de Minecraft, así que terreno, nubes, sol y luna se siguen viendo normal. Esto es lo único que cubre **mirando para arriba**, que la niebla sola no tiñe.
-3. Achica la distancia de niebla (`ViewportEvent.RenderFog`, cancelando el evento como pide su Javadoc) cuando hay una zona de niebla activa, para que de verdad cueste ver lejos, no solo que se vea de otro color.
+`client/ClientEvents.java` junta todo, cada frame, sin ningún paquete de red ni rampa de por medio para el humo (eso es justamente lo que cambió respecto a la versión anterior — antes el servidor calculaba la densidad cada medio segundo y el cliente suavizaba hacia ese valor; ahora el cliente calcula todo en vivo contra la posición real de la cámara):
 
-Sin efecto activo (intensidad 0), ninguna de las partes toca nada.
+1. Tiñe la niebla (`ViewportEvent.ComputeFogColor`) con el color de horizonte del cielo global y, encima, con el color mezclado de las zonas de humo que toquen la cámara — se pueden combinar los dos a la vez.
+2. Dibuja el domo del cielo global (`RenderLevelStageEvent.AFTER_SKY`) por encima de todo, sin escribir profundidad — igual que el propio cielo de Minecraft, así que terreno, nubes, sol y luna se siguen viendo normal. Esto es lo único que cubre **mirando para arriba**, que la niebla sola no tiñe.
+3. Achica la distancia de niebla (`ViewportEvent.RenderFog`, cancelando el evento como pide su Javadoc) según la densidad de humo en la posición de la cámara, para que de verdad cueste ver lejos, no solo que se vea de otro color.
+
+Sin zonas activas ni cielo de color, ninguna de las partes toca nada.
 
 ## Estado / próximos pasos
 
-Compila y carga bien en el juego (probado por el usuario: vidas, cielo y niebla funcionando). Ajustes hechos sobre la marcha, probados:
+Lo del cielo (domo, culling, `BufferUploader`) ya está probado y funcionando en el juego. **Lo del humo/niebla por zonas se reescribió de raíz** (antes era server-autoritativo con push cada 0.5s + rampa cliente; ahora es 100% cálculo en vivo del lado del cliente contra zonas sincronizadas) y **todavía no se compiló ni se probó** esta versión nueva — ver el README de `VoranixExtremo` para la lista completa de cambios del otro lado.
 
-- `BufferUploader` estaba mal importado (`net.minecraft.client.renderer` → `com.mojang.blaze3d.vertex`), confirmado contra la documentación de Mojang.
-- El anillo del horizonte del domo (`ALTURA_HORIZONTE`) estaba exactamente a la altura de los ojos (0): mirando al frente la cámara lo veía de canto en vez de ver la cara inclinada, y el color recién se notaba mirando bastante para arriba. Se bajó a -90.
-- El domo se dibuja desde ADENTRO (la cámara está rodeada). Sin desactivar el culling, la GPU descartaba buena parte de los triángulos según la dirección — por eso se veía fuerte yendo hacia el horizonte pero casi nada mirando para arriba. Se agregó `RenderSystem.disableCull()`/`enableCull()` alrededor del dibujo.
+Pendiente, en fases ya acordadas con el usuario:
+- **Fase 3** — máquina de humo: una zona esfera que crece y después encoge sola, usando los campos `creciendoActivo`/`tickInicio`/`velocidadBloquesPorSegundo`/`radioMaximo` que el protocolo ya reserva (por eso van en el paquete desde ahora, aunque hoy siempre lleguen en 0/false).
+- **Fase 4** — el humo visible (hoy son partículas vanilla chicas, spawneadas desde el servidor) pasa a ser una partícula custom del mod, grande (3-6 bloques) y de vida larga, generada del lado del cliente dentro del volumen de cada `SmokeZone`.
 
-Todavía evaluando si con eso alcanza o si hace falta ajustar más el radio/altura del domo para que el color domine más (pedido explícito: "debe verse más el color").
-
-Ideas para después: la misma estructura (un paquete nuevo, un `id` nuevo en `NetworkHandler`) sirve para cualquier otro efecto puramente visual (vibrado de cámara, viñeta de color, HUD de corazones custom, etc.) sin tocar lo que ya hay.
-
-Ideas para después: la misma estructura (un paquete nuevo, un `id` nuevo en `NetworkHandler`) sirve para cualquier otro efecto puramente visual (vibrado de cámara, viñeta de color, etc.) sin tocar lo que ya hay.
+Ideas para después, sin relación con el humo: la misma estructura (un paquete nuevo, un `id` nuevo en `NetworkHandler`) sirve para cualquier otro efecto puramente visual (vibrado de cámara, viñeta de color, HUD de corazones custom, etc.) sin tocar lo que ya hay.

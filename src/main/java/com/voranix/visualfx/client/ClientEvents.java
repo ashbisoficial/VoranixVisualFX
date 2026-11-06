@@ -10,6 +10,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import com.voranix.visualfx.VoranixVisualFX;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.util.Mth;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.client.event.ViewportEvent;
@@ -20,21 +21,23 @@ import org.joml.Matrix4f;
 /**
  * Cuatro cosas, todas opcionales (si el efecto correspondiente no está activo, no tocan nada):
  *  - onComputeFogColor: tiñe la niebla con el color del cielo global (SkyColorEffect) y, encima,
- *    con el color de la zona de niebla local (FogZoneEffect) si el jugador está adentro de una.
+ *    con el color/densidad de las zonas de humo que toquen la posición de la CÁMARA en este
+ *    frame (SmokeZoneRegistry.mezclar) - se recalcula en vivo cada frame, no hay rampa ni
+ *    paquete de red de por medio para esto.
  *  - onRenderSky: domo de color del cielo global por ENCIMA de todo (ver SkyColorEffect) - un
  *    abanico de triángulos, cenit en la punta y horizonte en el borde, sin escribir profundidad
  *    (como el propio cielo de Minecraft), así que terreno, nubes, sol y luna se dibujan encima
  *    sin problema.
- *  - onRenderFog: achica la distancia de niebla (cuánto se ve) cuando el jugador está dentro de
- *    una zona de niebla local - esto SÍ hay que cancelar el evento para que tome efecto, lo dice
- *    el propio Javadoc de Forge para RenderFog.
+ *  - onRenderFog: achica la distancia de niebla (cuánto se ve) según la densidad de zona de
+ *    humo en la posición de la cámara - esto SÍ hay que cancelar el evento para que tome efecto,
+ *    lo dice el propio Javadoc de Forge para RenderFog.
  *
  * OJO al compilar: RenderLevelStageEvent#getPoseStack()/getPartialTick() son los nombres
  * habituales en mods Forge 1.20.1 para esto, pero no los pude verificar contra el jar real de
  * Forge (sin red hacia maven.minecraftforge.net acá) - si el compilador no los encuentra, es
  * lo primero a revisar (puede que haya un getter con otro nombre, o que haya que sacarlos del
- * propio event de otra forma). ComputeFogColor y RenderFog sí están verificados contra la
- * fuente real de Forge (ViewportEvent.java).
+ * propio event de otra forma). ComputeFogColor, RenderFog y Camera#getPosition() sí están
+ * verificados contra la fuente real de Forge/vanilla.
  */
 @Mod.EventBusSubscriber(modid = VoranixVisualFX.MODID, value = Dist.CLIENT)
 public final class ClientEvents {
@@ -64,24 +67,27 @@ public final class ClientEvents {
             event.setBlue(lerp(event.getBlue(), SkyColorEffect.azulHorizonte(), intensidadCielo));
         }
 
-        // la niebla de zona se mezcla ENCIMA de lo anterior, no en vez de - así un jugador puede
-        // estar bajo un cielo de color Y dentro de una zona de niebla al mismo tiempo.
-        float intensidadZona = FogZoneEffect.intensidad(partialTick);
-        if (intensidadZona > 0f) {
-            event.setRed(lerp(event.getRed(), FogZoneEffect.rojo(), intensidadZona));
-            event.setGreen(lerp(event.getGreen(), FogZoneEffect.verde(), intensidadZona));
-            event.setBlue(lerp(event.getBlue(), FogZoneEffect.azul(), intensidadZona));
+        // el humo se mezcla ENCIMA de lo anterior, no en vez de - un jugador puede estar bajo un
+        // cielo de color Y dentro de una zona de humo al mismo tiempo. Se recalcula en vivo
+        // contra la posición de la cámara de este frame, sin rampa ni delay de red.
+        Vec3 camara = event.getCamera().getPosition();
+        SmokeZoneRegistry.Mezcla zona = SmokeZoneRegistry.mezclar(camara.x, camara.y, camara.z);
+        if (zona.densidad() > 0f) {
+            event.setRed(lerp(event.getRed(), zona.rojo(), zona.densidad()));
+            event.setGreen(lerp(event.getGreen(), zona.verde(), zona.densidad()));
+            event.setBlue(lerp(event.getBlue(), zona.azul(), zona.densidad()));
         }
     }
 
     @SubscribeEvent
     public static void onRenderFog(ViewportEvent.RenderFog event) {
-        float intensidad = FogZoneEffect.intensidad((float) event.getPartialTick());
-        if (intensidad <= 0f) {
+        Vec3 camara = event.getCamera().getPosition();
+        SmokeZoneRegistry.Mezcla zona = SmokeZoneRegistry.mezclar(camara.x, camara.y, camara.z);
+        if (zona.densidad() <= 0f) {
             return;
         }
-        event.setNearPlaneDistance(lerp(event.getNearPlaneDistance(), FogZoneEffect.cercana(), intensidad));
-        event.setFarPlaneDistance(lerp(event.getFarPlaneDistance(), FogZoneEffect.lejana(), intensidad));
+        event.setNearPlaneDistance(lerp(event.getNearPlaneDistance(), zona.cercana(), zona.densidad()));
+        event.setFarPlaneDistance(lerp(event.getFarPlaneDistance(), zona.lejana(), zona.densidad()));
         // Forge exige cancelar el evento para que los cambios de distancia tomen efecto
         // (Javadoc de RenderFog en ViewportEvent.java) - sin esto, setear las distancias no hace nada.
         event.setCanceled(true);
