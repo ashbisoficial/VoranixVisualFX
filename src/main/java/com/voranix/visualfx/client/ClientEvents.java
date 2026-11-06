@@ -60,8 +60,12 @@ public final class ClientEvents {
     private static final int SEGMENTOS = 24;
     private static final float RADIO_HORIZONTE = 300f;
     private static final float ALTURA_CENIT = 280f;
-    /** Alpha máximo (0-1) de la capa de pantalla completa, con densidad 1 (bien adentro de la zona). */
-    private static final float ALPHA_HUMO_MAXIMO = 0.7f;
+    /**
+     * Alpha máximo (0-1) de la capa de pantalla completa, con densidad 1 (bien adentro de la
+     * zona). En 1.0 (opacidad total) no se ve NADA del fondo ahí adentro - cielo, sol y nubes
+     * incluidos, como se pidió. Antes estaba en 0.7 y dejaba ver un 30% del fondo.
+     */
+    private static final float ALPHA_HUMO_MAXIMO = 1f;
     // Ojo acá: tiene que quedar CLARAMENTE por debajo de la altura de la cámara (0), no en 0 ni
     // cerca. Un anillo exactamente a la altura de los ojos queda "de canto" mirando al frente
     // (nivel) - la cámara ve ese borde del abanico de triángulos de perfil, en vez de ver la cara
