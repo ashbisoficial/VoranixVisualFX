@@ -26,9 +26,9 @@ public final class HumoGrandeParticle extends TextureSheetParticle {
      * acá el color justo antes de pedir la partícula, y el constructor lo lee enseguida - ambos
      * corren en el mismo hilo (el tick del cliente), así que no hay condición de carrera real.
      */
-    static float proximoRojo = 1f;
-    static float proximoVerde = 1f;
-    static float proximoAzul = 1f;
+    public static float proximoRojo = 1f;
+    public static float proximoVerde = 1f;
+    public static float proximoAzul = 1f;
 
     private static final float ALPHA_PLENO = 0.5f;
     private static final int TICKS_FADE_IN = 20;
