@@ -73,6 +73,7 @@ Las clases que arman y mandan estos tres últimos, del lado del plugin, están e
 - `client/SkyColorEffect.java` — color de cielo global, con su rampa de entrada/salida (eso no cambió).
 - `client/SmokeZone.java` — una zona de humo (caja o esfera, la misma clase con un campo de tipo), con `density(x, y, z, tick)`: 1.0 adentro, cae lineal en los últimos `margen` bloques antes del borde, 0.0 más allá.
 - `client/SmokeZoneRegistry.java` — qué zonas hay activas ahora (las que mandó el plugin para este mundo) y `mezclar(x, y, z)`: la densidad **máxima** entre todas las que tocan ese punto, con el color mezclado por peso de cada una que esté aportando.
+- `client/SmokeCloudSpawner.java` + `client/particle/HumoGrandeParticle.java` — la nube visible desde AFUERA (ver más abajo, "Estado / próximos pasos").
 
 `client/ClientEvents.java` junta todo, cada frame, sin ningún paquete de red ni rampa de por medio para el humo (eso es justamente lo que cambió respecto a la versión anterior — antes el servidor calculaba la densidad cada medio segundo y el cliente suavizaba hacia ese valor; ahora el cliente calcula todo en vivo contra la posición real de la cámara):
 
@@ -85,12 +86,14 @@ Sin zonas activas ni cielo de color, ninguna de las partes toca nada.
 
 ## Estado / próximos pasos
 
-Lo del cielo (domo, culling, `BufferUploader`) ya está probado y funcionando en el juego. **La sincronización de zonas (Fase 1+2) se probó en el servidor real y funciona** — la niebla de distancia se aplicaba, pero con los defaults viejos (cercana/lejana 2-18) se veía muy larga y el cielo de fondo no quedaba cubierto, así que se ajustó: defaults 0/4, forma esférica, y la capa de pantalla completa (punto 4 de arriba). Esto último (`FogShape.SPHERE` y `RenderGuiOverlayEvent.Pre`) **todavía no se compiló ni se probó** en el juego.
+Lo del cielo (domo, culling, `BufferUploader`) ya está probado y funcionando en el juego. **La sincronización de zonas (Fase 1+2) se probó en el servidor real y funciona.** `FogShape.SPHERE` y la capa de pantalla completa (`RenderGuiOverlayEvent.Pre`) también se probaron: con alpha 0.7 se colaba un 30% del cielo/sol de fondo, con 1.0 tapaba todo pero quedaba una pantalla completamente plana (sin variación ni cerca de la cámara) - quedó en 0.55 como punto medio, probado en el juego.
 
-**Las partículas vanilla del lado del plugin se sacaron** (`FogZoneManager.animarHumo()` ya no existe) — se veían como puntitos negros sueltos, no como una nube. Hoy, sin el mod instalado, una zona no se nota en absoluto.
+**Las partículas vanilla del lado del plugin se sacaron** (`FogZoneManager.animarHumo()` ya no existe) — se veían como puntitos negros sueltos, no como una nube.
+
+**Fase 4 (parcial) ya está implementada, pero sin compilar ni probar en el juego todavía:** `client/particle/HumoGrandeParticle.java` — una nube de humo grande (2.5-4.5 bloques, textura difusa propia en `textures/particle/humo_grande.png`, no un cuadrado ni un punto), con fade-in/fade-out, spawneada por `client/SmokeCloudSpawner.java` en puntos al azar dentro del volumen de cada `SmokeZone` (mismo muestreo caja/esfera que tenía `animarHumo()` del plugin, ahora del lado del cliente). Esto es lo que hace que una zona se vea **desde afuera, antes de entrar** — sin esto, una zona recién se nota cuando ya estás adentro, lo cual pega de golpe y no deja saber dónde hay niebla y dónde no. Solo lo ve quien tenga el mod instalado (a diferencia de las partículas vanilla viejas, que las veía cualquiera).
 
 Pendiente, en fases ya acordadas con el usuario:
 - **Fase 3** — máquina de humo: una zona esfera que crece y después encoge sola, usando los campos `creciendoActivo`/`tickInicio`/`velocidadBloquesPorSegundo`/`radioMaximo` que el protocolo ya reserva (por eso van en el paquete desde ahora, aunque hoy siempre lleguen en 0/false).
-- **Fase 4** — humo visible de verdad: una partícula custom del mod, grande (3-6 bloques) y de vida larga, generada del lado del cliente dentro del volumen de cada `SmokeZone` (reemplaza a la capa de pantalla plana del punto 4 de arriba, que es un placeholder más simple mientras tanto).
+- Afinar `HumoGrandeParticle`/`SmokeCloudSpawner` una vez se vea en el juego: tamaño, alpha, cantidad de partículas simultáneas por zona y qué tan lejos conviene seguir spawneando (`DISTANCIA_MAXIMA`) son valores de partida, no probados.
 
 Ideas para después, sin relación con el humo: la misma estructura (un paquete nuevo, un `id` nuevo en `NetworkHandler`) sirve para cualquier otro efecto puramente visual (vibrado de cámara, viñeta de color, HUD de corazones custom, etc.) sin tocar lo que ya hay.

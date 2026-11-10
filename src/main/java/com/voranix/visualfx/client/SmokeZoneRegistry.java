@@ -2,6 +2,7 @@ package com.voranix.visualfx.client;
 
 import net.minecraft.client.Minecraft;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -33,6 +34,11 @@ public final class SmokeZoneRegistry {
 
     public static void limpiar() {
         zonas.clear();
+    }
+
+    /** Las zonas activas ahora mismo (para spawnear la nube de partículas visible desde afuera). */
+    public static Collection<SmokeZone> todas() {
+        return zonas.values();
     }
 
     /**

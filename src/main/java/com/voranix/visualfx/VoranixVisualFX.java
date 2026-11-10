@@ -1,9 +1,11 @@
 package com.voranix.visualfx;
 
+import com.voranix.visualfx.client.particle.ModParticles;
 import com.voranix.visualfx.network.NetworkHandler;
 import net.minecraftforge.fml.IExtensionPoint;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.network.NetworkConstants;
 
 /**
@@ -23,5 +25,6 @@ public class VoranixVisualFX {
                 () -> new IExtensionPoint.DisplayTest(() -> NetworkConstants.IGNORESERVERONLY, (incoming, isNetwork) -> true));
 
         NetworkHandler.register();
+        ModParticles.REGISTER.register(FMLJavaModLoadingContext.get().getModEventBus());
     }
 }
