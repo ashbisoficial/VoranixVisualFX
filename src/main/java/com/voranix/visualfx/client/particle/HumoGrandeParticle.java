@@ -44,8 +44,11 @@ public final class HumoGrandeParticle extends TextureSheetParticle {
         this.gCol = proximoVerde;
         this.bCol = proximoAzul;
         this.alpha = 0f;
-        this.lifetime = 100 + this.random.nextInt(80);
-        this.quadSize = 2.5f + this.random.nextFloat() * 2f;
+        // Vida larga (15-25s): que no se note un ciclo constante de aparecer/desaparecer en la
+        // nube - cuantas menos nacen y mueren por segundo, más quieta se siente (el spawn rate
+        // de SmokeCloudSpawner está ajustado para esta duración, ver ahí).
+        this.lifetime = 300 + this.random.nextInt(200);
+        this.quadSize = 4f + this.random.nextFloat() * 3f;
         this.hasPhysics = false;
         this.gravity = 0f;
         this.friction = 1f;

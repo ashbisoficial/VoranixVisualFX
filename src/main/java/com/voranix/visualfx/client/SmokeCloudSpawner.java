@@ -23,8 +23,10 @@ import java.util.concurrent.ThreadLocalRandom;
 @Mod.EventBusSubscriber(modid = VoranixVisualFX.MODID, value = Dist.CLIENT)
 public final class SmokeCloudSpawner {
 
-    private static final int INTERVALO_TICKS = 3;
-    private static final int PARTICULAS_POR_ZONA_POR_INTERVALO = 2;
+    // Ajustado para la vida larga de HumoGrandeParticle (300-500 ticks, ver ahí) - con el mismo
+    // ritmo que antes (vida corta) se habrían acumulado muchísimas más partículas activas a la vez.
+    private static final int INTERVALO_TICKS = 6;
+    private static final int PARTICULAS_POR_ZONA_POR_INTERVALO = 1;
     /** No gastar partículas (ni ciclos) en zonas tan lejos de la cámara que ni se van a notar. */
     private static final double DISTANCIA_MAXIMA = 48.0;
     /** Deriva vertical lenta, como humo de verdad subiendo despacio. */
