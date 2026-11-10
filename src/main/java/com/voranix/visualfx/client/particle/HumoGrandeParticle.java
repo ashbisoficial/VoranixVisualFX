@@ -48,7 +48,9 @@ public final class HumoGrandeParticle extends TextureSheetParticle {
         // nube - cuantas menos nacen y mueren por segundo, más quieta se siente (el spawn rate
         // de SmokeCloudSpawner está ajustado para esta duración, ver ahí).
         this.lifetime = 300 + this.random.nextInt(200);
-        this.quadSize = 4f + this.random.nextFloat() * 3f;
+        // Más grandes que antes (4-7) para que se superpongan de verdad entre ellas y se funda
+        // en una sola nube, en vez de leerse como bolas separadas con espacio vacío entre medio.
+        this.quadSize = 7f + this.random.nextFloat() * 4f;
         this.hasPhysics = false;
         this.gravity = 0f;
         this.friction = 1f;
